@@ -13,7 +13,9 @@ namespace LegoLoad
         {
             using (var greeter = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                Console.WriteLine(greeter.CreateGreeting("hello, world"));
+                var greeting = greeter.CreateGreeting("hello, world");
+                Console.WriteLine($"{greeting.Message} in {greeting.ExecutionTimeInMilliseconds} milliseconds.");
+                greeter.InsertNode();
             }
 
 
