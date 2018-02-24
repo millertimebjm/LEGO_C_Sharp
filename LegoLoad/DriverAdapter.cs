@@ -42,7 +42,7 @@ namespace LegoLoad
                     };
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 return new ResultModel()
                 {
@@ -50,21 +50,17 @@ namespace LegoLoad
                     Message = ex.Message,
                 };
             }
-            
+
         }
 
-        public ResultModel InsertNode()
+        public ResultModel InsertPart(Part part)
         {
             StopwatchResetAndStart();
             using (var session = _driver.Session())
             {
                 //CREATE (user:User { Id: 456, Name: 'Jim' })
                 //session.WriteTransaction()
-                var part = new Part()
-                {
-                    Id = "10039",
-                    Description = "Pullback Motor 8 x 4 x 2/3",
-                };
+
 
                 session.WriteTransaction(tx =>
                 {
@@ -72,25 +68,75 @@ namespace LegoLoad
                         new { part.Id, part.Description });
                 });
 
-//Neo4j.Driver.V1.ClientException: 'Invalid input '{ ': expected whitespace, a property key name, '}
-//', an identifier or UnsignedDecimalInteger (line 1, column 20 (offset: 19))
-//"CREATE (part:Part {{Id: $Id, Description: $Description}})"
-//         
+                return new ResultModel()
+                {
+                    Data = null,
+                    Result = true,
+                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
+                };
+            }
+        }
 
+        internal ResultModel InsertSet(Set set)
+        {
+            StopwatchResetAndStart();
+            using (var session = _driver.Session())
+            {
+                //CREATE (user:User { Id: 456, Name: 'Jim' })
+                //session.WriteTransaction()
 
-                var part2 = session.ReadTransaction(tx =>
+                session.WriteTransaction(tx =>
+                {
+                    var result = tx.Run("CREATE (set:Set {Id: $Id, Name: $Name, Year: $Year })",
+                        new { set.Id, set.Name, set.Year });
+                });
+
+                return new ResultModel()
+                {
+                    Data = null,
+                    Result = true,
+                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
+                };
+            }
+        }
+
+        internal ResultModel ExecuteCypher(string cypher)
+        {
+            StopwatchResetAndStart();
+            using (var session = _driver.Session())
+            {
+                session.WriteTransaction(tx =>
+                {
+                    var result = tx.Run(cypher);
+                });
+
+                return new ResultModel()
+                {
+                    Data = null,
+                    Result = true,
+                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
+                };
+            }
+        }
+
+        public ResultModel GetPart(string id)
+        {
+            StopwatchResetAndStart();
+            using (var session = _driver.Session())
+            {
+                var node = session.ReadTransaction<INode>(tx =>
                 {
                     var result = tx.Run(@"
 MATCH (part:Part)
 WHERE part.Id = $Id
 RETURN part
-                    ", new { part.Id });
-                    return result.Single()[0].As<Part>();
+                    ", new { Id = id });
+                    return result.Single()[0].As<INode>();
                 });
 
                 return new ResultModel()
                 {
-                    Data = part2,
+                    Data = node.AsPart(),
                     ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
                 };
             }

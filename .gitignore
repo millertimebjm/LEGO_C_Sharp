@@ -6,3 +6,5 @@
 /LegoLoad/.vs/LegoLoad/v15
 /LegoLoad/bin/Debug
 /LegoLoad/packages/Neo4j.Driver.1.5.2
+/LegoLoad/packages/Neo4jClient.3.0.1.1
+/LegoLoad/packages
