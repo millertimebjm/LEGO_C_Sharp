@@ -23,41 +23,47 @@ namespace LegoLoad
         static void Main(string[] args)
         {
             //DriverAdapter();
-            DriverLoadParts();
-            DriverLoadSets();
-
             //ClientAdapter();
+            var parts = DriverLoadParts();
+            var sets = DriverLoadSets();
+            
+            
 
             
         }
 
-        private static void DriverLoadParts()
+        private static List<Part> DriverLoadParts()
         {
-            using (var driver= new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
+            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                var deleteResult = driver.ExecuteCypher("MATCH (part:Part) DELETE part");
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Part) DELETE a");
 
-                var parts = ReadCsv.Process(@"C:\temp\BigData\LEGO\parts.csv").Skip(1);
-                foreach (var partArray in parts)
+                var partsCsv = ReadCsv.Process(@"C:\temp\BigData\LEGO\parts.csv").Skip(1);
+                var parts = new List<Part>();
+
+                foreach (var partArray in partsCsv)
                 {
                     var part = new Part()
                     {
                         Id = partArray[0],
                         Description = partArray[1],
                     };
+                    parts.Add(part);
                     var insertResult = driver.InsertPart(part);
                 }
                 // 47 seconds
+                return parts;
             }
         }
 
-        private static void DriverLoadSets()
+        private static List<Set> DriverLoadSets()
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                var deleteResult = driver.ExecuteCypher("MATCH (set:Set) DELETE set");
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Set) DELETE a");
 
-                var sets = ReadCsv.Process(@"C:\temp\BigData\LEGO\sets.csv").Skip(1);
+                var setsCsv = ReadCsv.Process(@"C:\temp\BigData\LEGO\sets.csv").Skip(1);
+                var sets = new List<Set>();
                 foreach (var setArray in sets)
                 {
                     var set = new Set()
@@ -66,9 +72,10 @@ namespace LegoLoad
                         Name = setArray[1],
                         Year = setArray[2].As<int>(),
                     };
+                    sets.Add(set);
                     var insertResult = driver.InsertSet(set);
                 }
-                
+                return sets;
             }
         }
 
@@ -78,7 +85,7 @@ namespace LegoLoad
             {
                 //var greeting = greeter.CreateGreeting("hello, world");
                 //Console.WriteLine($"{greeting.Message} in {greeting.ExecutionTimeInMilliseconds} milliseconds.");
-                var deleteResult = greeter.ExecuteCypher("MATCH (part:Part) DELETE part");
+                var deleteResult = greeter.ExecuteCypher("MATCH (a:Part) DELETE a");
 
                 //var part = new Part()
                 //{

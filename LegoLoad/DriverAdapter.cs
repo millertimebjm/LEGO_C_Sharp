@@ -64,7 +64,7 @@ namespace LegoLoad
 
                 session.WriteTransaction(tx =>
                 {
-                    var result = tx.Run("CREATE (part:Part {Id: $Id, Description: $Description})",
+                    var result = tx.Run("CREATE (a:Part {Id: $Id, Description: $Description})",
                         new { part.Id, part.Description });
                 });
 
@@ -87,7 +87,7 @@ namespace LegoLoad
 
                 session.WriteTransaction(tx =>
                 {
-                    var result = tx.Run("CREATE (set:Set {Id: $Id, Name: $Name, Year: $Year })",
+                    var result = tx.Run("CREATE (a:Set {Id: $Id, Name: $Name, Year: $Year })",
                         new { set.Id, set.Name, set.Year });
                 });
 
@@ -127,9 +127,9 @@ namespace LegoLoad
                 var node = session.ReadTransaction<INode>(tx =>
                 {
                     var result = tx.Run(@"
-MATCH (part:Part)
-WHERE part.Id = $Id
-RETURN part
+MATCH (a:Part)
+WHERE a.Id = $Id
+RETURN a
                     ", new { Id = id });
                     return result.Single()[0].As<INode>();
                 });
@@ -140,6 +140,28 @@ RETURN part
                     ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
                 };
             }
+        }
+
+        /// <summary>
+        /// First Type, then Id
+        /// ex. [Set, 1], [Part, 2]
+        /// </summary>
+        /// <param name="fromKey">Type</param>
+        /// <param name="toKey">Id</param>
+        /// <returns></returns>
+        public ResultModel CreateRelationship_Type_Id(KeyValuePair<string, string> a, KeyValuePair<string,string> b)
+        {
+            //MATCH(a: Person),(b: Person)
+            //WHERE a.name = 'Node A' AND b.name = 'Node B'
+            //CREATE(a) -[r: RELTYPE]->(b)
+            //RETURN r
+
+            return ExecuteCypher($@"
+MATCH(a: { a.Key}),(b: { b.Key})
+WHERE a.Id = '{a.Value}' AND b.Id = '{b.Value}'
+CREATE(a) -[r: RELTYPE]->(b)
+return r
+                    ");
         }
 
         public void Dispose()
