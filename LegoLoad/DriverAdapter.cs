@@ -146,10 +146,10 @@ RETURN a
         /// First Type, then Id
         /// ex. [Set, 1], [Part, 2]
         /// </summary>
-        /// <param name="fromKey">Type</param>
-        /// <param name="toKey">Id</param>
+        /// <param name="a">Type/Id</param>
+        /// <param name="b">Type/Id</param>
         /// <returns></returns>
-        public ResultModel CreateRelationship_Type_Id(KeyValuePair<string, string> a, KeyValuePair<string,string> b)
+        public ResultModel CreateRelationship_Type_Id(KeyValuePair<string, string> a, KeyValuePair<string,string> b, string relationType)
         {
             //MATCH(a: Person),(b: Person)
             //WHERE a.name = 'Node A' AND b.name = 'Node B'
@@ -159,7 +159,7 @@ RETURN a
             return ExecuteCypher($@"
 MATCH(a: { a.Key}),(b: { b.Key})
 WHERE a.Id = '{a.Value}' AND b.Id = '{b.Value}'
-CREATE(a) -[r: RELTYPE]->(b)
+CREATE(a) -[r: {relationType}]->(b)
 return r
                     ");
         }

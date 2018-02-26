@@ -1,4 +1,5 @@
-﻿using Neo4j.Driver.V1;
+﻿using LegoLoad.Models;
+using Neo4j.Driver.V1;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,58 +25,90 @@ namespace LegoLoad
         {
             //DriverAdapter();
             //ClientAdapter();
-            var parts = DriverLoadParts();
-            var sets = DriverLoadSets();
-            
-            
+            var parts = GetParts();
+            DriverLoadParts(parts);
+            var sets = GetSets();
+            DriverLoadSets(sets);
+            var inventories = GetInventories();
+            var inventoryParts = GetInventoryParts();
 
             
         }
 
-        private static List<Part> DriverLoadParts()
+        private static IEnumerable<Inventory> GetInventories()
+        {
+            var inventories = ReadCsv.Process(@"C:\temp\BigData\LEGO\inventories.csv")
+                .Skip(1)
+                .Select(_ => new Inventory()
+                {
+                    Id = _[0],
+                    SetId = _[1],
+                });
+            return inventories;
+        }
+
+        private static IEnumerable<InventoryPart> GetInventoryParts()
+        {
+            var inventoryParts = ReadCsv.Process(@"C:\temp\BigData\LEGO\inventory_parts.csv")
+                .Skip(1)
+                .Select(_ => new InventoryPart()
+                {
+                    InventoryId = _[0].As<int>(),
+                    PartId = _[1],
+                    Quantity = _[2].As<int>(),
+                });
+            return inventoryParts;
+        }
+
+        private static IEnumerable<Part> GetParts()
+        {
+            var parts = ReadCsv.Process(@"C:\temp\BigData\LEGO\parts.csv")
+                .Skip(1)
+                .Select(_ => new Part()
+                {
+                    Id = _[0],
+                    Description = _[1],
+                });
+            return parts;
+        }
+
+        private static IEnumerable<Set> GetSets()
+        {
+            var sets = ReadCsv.Process(@"C:\temp\BigData\LEGO\sets.csv")
+                .Skip(1)
+                .Select(_ => new Set()
+                {
+                    Id = _[0],
+                    Name = _[1],
+                    Year = _[2].As<int>(),
+                });
+            return sets;
+        }
+
+        private static void DriverLoadParts(IEnumerable<Part> parts)
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher("MATCH (a:Part) DELETE a");
 
-                var partsCsv = ReadCsv.Process(@"C:\temp\BigData\LEGO\parts.csv").Skip(1);
-                var parts = new List<Part>();
-
-                foreach (var partArray in partsCsv)
+                foreach (var part in parts)
                 {
-                    var part = new Part()
-                    {
-                        Id = partArray[0],
-                        Description = partArray[1],
-                    };
-                    parts.Add(part);
                     var insertResult = driver.InsertPart(part);
                 }
                 // 47 seconds
-                return parts;
             }
         }
 
-        private static List<Set> DriverLoadSets()
+        private static void DriverLoadSets(IEnumerable<Set> sets)
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher("MATCH (a:Set) DELETE a");
 
-                var setsCsv = ReadCsv.Process(@"C:\temp\BigData\LEGO\sets.csv").Skip(1);
-                var sets = new List<Set>();
-                foreach (var setArray in sets)
+                foreach (var set in sets)
                 {
-                    var set = new Set()
-                    {
-                        Id = setArray[0],
-                        Name = setArray[1],
-                        Year = setArray[2].As<int>(),
-                    };
-                    sets.Add(set);
                     var insertResult = driver.InsertSet(set);
                 }
-                return sets;
             }
         }
 
