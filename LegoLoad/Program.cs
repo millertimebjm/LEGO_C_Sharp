@@ -32,12 +32,15 @@ namespace LegoLoad
             DriverLoadParts(parts);
             DriverLoadSets(sets);
             DriverLoadInventory(inventories);
+            //DriverSetInventoryRelationship(sets, inventories, "CONTAINS", "CONTAINED_IN");
+            //DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS", "CONTAINED_IN");
             DriverSetInventoryRelationship(sets, inventories, "CONTAINS", "CONTAINED_IN");
             DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS", "CONTAINED_IN");
-            
+
         }
 
-        private static void DriverInventoryPartRelationship(IEnumerable<InventoryPart> inventoryParts, IEnumerable<Part> parts, string relationship1, string relationship2)
+        //private static void DriverInventoryPartRelationship(IEnumerable<InventoryPart> inventoryParts, IEnumerable<Part> parts, string relationship1, string relationship2)
+        private static void DriverInventoryPartRelationship(IEnumerable<InventoryPart> inventoryParts, IEnumerable<Part> parts, string relationship)
         {
             // TODO: Add Indexes
 
@@ -46,13 +49,13 @@ namespace LegoLoad
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher($@"
-MATCH(:Inventory) -[r:{relationship1}] - (:Part)
+MATCH(:Inventory) -[r:{relationship}] - (:Part)
 DELETE r
                 ");
-                deleteResult = driver.ExecuteCypher($@"
-MATCH(:Part) -[r:{relationship2}] - (:Inventory)
-DELETE r
-                ");
+//                deleteResult = driver.ExecuteCypher($@"
+//MATCH(:Part) -[r:{relationship2}] - (:Inventory)
+//DELETE r
+//                ");
 
                 //CREATE INDEX ON: User(username)
                 //CREATE INDEX ON: Role(name)
@@ -67,18 +70,19 @@ DELETE r
                 {
                     var insertResult = driver.ExecuteCypher($@"
 MATCH (i:Inventory {{Id: '{inventoryPartPart.InventoryId}' }}), (p:Part {{ Id: '{inventoryPartPart.PartId}' }})
-CREATE (i)-[:{relationship1} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(p)
+CREATE (i)-[:{relationship} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(p)
                     ");
 
-                    insertResult = driver.ExecuteCypher($@"
-MATCH (p:Part {{ Id: '{inventoryPartPart.PartId}' }}), (i:Inventory {{Id: '{inventoryPartPart.InventoryId}' }})
-CREATE (p)-[:{relationship2} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(i)
-                    ");
+//                    insertResult = driver.ExecuteCypher($@"
+//MATCH (p:Part {{ Id: '{inventoryPartPart.PartId}' }}), (i:Inventory {{Id: '{inventoryPartPart.InventoryId}' }})
+//CREATE (p)-[:{relationship2} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(i)
+//                    ");
                 }
             }
         }
 
-        private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship1, string relationship2)
+        //private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship1, string relationship2)
+        private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship)
         {
             // TODO: Add Indexes
 
@@ -87,13 +91,13 @@ CREATE (p)-[:{relationship2} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare:
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher($@"
-MATCH(:Set) -[r:{relationship1}] - (:Inventory)
+MATCH(:Set) -[r:{relationship}] - (:Inventory)
 DELETE r
                 ");
-                deleteResult = driver.ExecuteCypher($@"
-MATCH(:Inventory) -[r:{relationship2}] - (:Set)
-DELETE r
-                ");
+//                deleteResult = driver.ExecuteCypher($@"
+//MATCH(:Inventory) -[r:{relationship2}] - (:Set)
+//DELETE r
+//                ");
 
                 //CREATE INDEX ON: User(username)
                 //CREATE INDEX ON: Role(name)
@@ -109,13 +113,13 @@ DELETE r
                 {
                     var insertResult = driver.ExecuteCypher($@"
 MATCH (s:Set {{Id: '{setInventory.SetId}' }}), (i:Inventory {{ Id: '{setInventory.InventoryId}' }})
-CREATE (s)-[:{relationship1} {{ Version: {setInventory.Version} }}]->(i)
+CREATE (s)-[:{relationship} {{ Version: {setInventory.Version} }}]->(i)
                     ");
 
-                    insertResult = driver.ExecuteCypher($@"
-MATCH (i:Inventory {{ Id: '{setInventory.InventoryId}' }}), (s:Set {{Id: '{setInventory.SetId}' }})
-CREATE (i)-[:{relationship2} {{ Version: {setInventory.Version} }}]->(s)
-                    ");
+//                    insertResult = driver.ExecuteCypher($@"
+//MATCH (i:Inventory {{ Id: '{setInventory.InventoryId}' }}), (s:Set {{Id: '{setInventory.SetId}' }})
+//CREATE (i)-[:{relationship2} {{ Version: {setInventory.Version} }}]->(s)
+//                    ");
                 }
             }
         }
