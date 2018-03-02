@@ -26,18 +26,18 @@ namespace LegoLoad
             //DriverAdapter();
             //ClientAdapter();
             var parts = GetParts();
-            DriverLoadParts(parts);
             var sets = GetSets();
-            DriverLoadSets(sets);
             var inventories = GetInventories();
             var inventoryParts = GetInventoryParts();
+            DriverLoadParts(parts);
+            DriverLoadSets(sets);
             DriverLoadInventory(inventories);
-            //DriverSetInventoryRelationship(sets, inventories, "CONTAINS");
-            //DriverInventoryPartRelationship(inventoryParts, parts);
+            DriverSetInventoryRelationship(sets, inventories, "CONTAINS", "CONTAINED_IN");
+            DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS", "CONTAINED_IN");
             
         }
 
-        private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship)
+        private static void DriverInventoryPartRelationship(IEnumerable<InventoryPart> inventoryParts, IEnumerable<Part> parts, string relationship1, string relationship2)
         {
             // TODO: Add Indexes
 
@@ -46,12 +46,60 @@ namespace LegoLoad
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher($@"
-MATCH(:Set) -[r:{relationship}] - (:Inventory)
+MATCH(:Inventory) -[r:{relationship1}] - (:Part)
+DELETE r
+                ");
+                deleteResult = driver.ExecuteCypher($@"
+MATCH(:Part) -[r:{relationship2}] - (:Inventory)
 DELETE r
                 ");
 
-//CREATE INDEX ON: User(username)
-//CREATE INDEX ON: Role(name)
+                //CREATE INDEX ON: User(username)
+                //CREATE INDEX ON: Role(name)
+                driver.ExecuteCypher("CREATE INDEX ON: Part(Id)");
+                //driver.ExecuteCypher("CREATE INDEX ON: Inventory(Id)");
+
+                var inventoryPartParts = inventoryParts.Join(parts, _ => _.PartId, _ => _.Id, (inventoryPart, part) => new { inventoryPart, part })
+                    .Select(_ => new { InventoryId = _.inventoryPart.InventoryId, PartId = _.part.Id, Quantity = _.inventoryPart.Quantity, IsSpare = _.inventoryPart.IsSpare });
+                //.GroupBy(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id });
+
+                foreach (var inventoryPartPart in inventoryPartParts)
+                {
+                    var insertResult = driver.ExecuteCypher($@"
+MATCH (i:Inventory {{Id: '{inventoryPartPart.InventoryId}' }}), (p:Part {{ Id: '{inventoryPartPart.PartId}' }})
+CREATE (i)-[:{relationship1} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(p)
+                    ");
+
+                    insertResult = driver.ExecuteCypher($@"
+MATCH (p:Part {{ Id: '{inventoryPartPart.PartId}' }}), (i:Inventory {{Id: '{inventoryPartPart.InventoryId}' }})
+CREATE (p)-[:{relationship2} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: {inventoryPartPart.IsSpare} }}]->(i)
+                    ");
+                }
+            }
+        }
+
+        private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship1, string relationship2)
+        {
+            // TODO: Add Indexes
+
+            //MATCH(:Artist) -[r: RELEASED] - (: Album)
+            //DELETE r
+            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
+            {
+                var deleteResult = driver.ExecuteCypher($@"
+MATCH(:Set) -[r:{relationship1}] - (:Inventory)
+DELETE r
+                ");
+                deleteResult = driver.ExecuteCypher($@"
+MATCH(:Inventory) -[r:{relationship2}] - (:Set)
+DELETE r
+                ");
+
+                //CREATE INDEX ON: User(username)
+                //CREATE INDEX ON: Role(name)
+
+                driver.ExecuteCypher("CREATE INDEX ON: Set(Id)");
+                driver.ExecuteCypher("CREATE INDEX ON: Inventory(Id)");
 
                 var setInventories = sets.Join(inventories, _ => _.Id, _ => _.SetId, (set, inventory) => new { set, inventory })
                     .Select(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id, _.inventory.Version });
@@ -60,9 +108,14 @@ DELETE r
                 foreach (var setInventory in setInventories)
                 {
                     var insertResult = driver.ExecuteCypher($@"
-MATCH (s:Set {{Id: $SetId }}), (i:Inventory {{ Id: $InventoryId }})
-CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
-                    ", setInventory);
+MATCH (s:Set {{Id: '{setInventory.SetId}' }}), (i:Inventory {{ Id: '{setInventory.InventoryId}' }})
+CREATE (s)-[:{relationship1} {{ Version: {setInventory.Version} }}]->(i)
+                    ");
+
+                    insertResult = driver.ExecuteCypher($@"
+MATCH (i:Inventory {{ Id: '{setInventory.InventoryId}' }}), (s:Set {{Id: '{setInventory.SetId}' }})
+CREATE (i)-[:{relationship2} {{ Version: {setInventory.Version} }}]->(s)
+                    ");
                 }
             }
         }
@@ -71,7 +124,7 @@ CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                var deleteResult = driver.ExecuteCypher("MATCH (a:Inventory) DELETE a");
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Inventory) DETACH DELETE a");
 
                 foreach (var inventory in inventories)
                 {
@@ -88,8 +141,9 @@ CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
                 .Select(_ => new Inventory()
                 {
                     Id = _[0],
-                    SetId = _[1],
-                    Version = int.Parse(_[2]),
+                    Version = int.Parse(_[1]),
+                    SetId = _[2],
+                    
                 });
             return inventories;
         }
@@ -137,7 +191,7 @@ CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                var deleteResult = driver.ExecuteCypher("MATCH (a:Part) DELETE a");
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Part) DETACH DELETE a");
 
                 foreach (var part in parts)
                 {
@@ -151,7 +205,7 @@ CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
         {
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
-                var deleteResult = driver.ExecuteCypher("MATCH (a:Set) DELETE a");
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Set) DETACH DELETE a");
 
                 foreach (var set in sets)
                 {
@@ -166,7 +220,7 @@ CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
             {
                 //var greeting = greeter.CreateGreeting("hello, world");
                 //Console.WriteLine($"{greeting.Message} in {greeting.ExecutionTimeInMilliseconds} milliseconds.");
-                var deleteResult = greeter.ExecuteCypher("MATCH (a:Part) DELETE a");
+                var deleteResult = greeter.ExecuteCypher("MATCH (a:Part) DETACH DELETE a");
 
                 //var part = new Part()
                 //{

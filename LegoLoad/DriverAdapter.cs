@@ -130,7 +130,7 @@ namespace LegoLoad
             StopwatchResetAndStart();
             using (var session = _driver.Session())
             {
-                session.WriteTransaction(tx =>
+                var result = session.WriteTransaction(tx =>
                 {
                     return tx.Run(cypher, parameters);
                 });
