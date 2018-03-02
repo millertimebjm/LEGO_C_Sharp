@@ -31,8 +31,54 @@ namespace LegoLoad
             DriverLoadSets(sets);
             var inventories = GetInventories();
             var inventoryParts = GetInventoryParts();
-
+            DriverLoadInventory(inventories);
+            //DriverSetInventoryRelationship(sets, inventories, "CONTAINS");
+            //DriverInventoryPartRelationship(inventoryParts, parts);
             
+        }
+
+        private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship)
+        {
+            // TODO: Add Indexes
+
+            //MATCH(:Artist) -[r: RELEASED] - (: Album)
+            //DELETE r
+            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
+            {
+                var deleteResult = driver.ExecuteCypher($@"
+MATCH(:Set) -[r:{relationship}] - (:Inventory)
+DELETE r
+                ");
+
+//CREATE INDEX ON: User(username)
+//CREATE INDEX ON: Role(name)
+
+                var setInventories = sets.Join(inventories, _ => _.Id, _ => _.SetId, (set, inventory) => new { set, inventory })
+                    .Select(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id, _.inventory.Version });
+                    //.GroupBy(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id });
+
+                foreach (var setInventory in setInventories)
+                {
+                    var insertResult = driver.ExecuteCypher($@"
+MATCH (s:Set {{Id: $SetId }}), (i:Inventory {{ Id: $InventoryId }})
+CREATE (s)-[:{relationship} {{ Version: $Version }}]->(r)
+                    ", setInventory);
+                }
+            }
+        }
+
+        private static void DriverLoadInventory(IEnumerable<Inventory> inventories)
+        {
+            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
+            {
+                var deleteResult = driver.ExecuteCypher("MATCH (a:Inventory) DELETE a");
+
+                foreach (var inventory in inventories)
+                {
+                    var insertResult = driver.InsertInventory(inventory);
+                }
+                // 47 seconds
+            }
         }
 
         private static IEnumerable<Inventory> GetInventories()
@@ -43,6 +89,7 @@ namespace LegoLoad
                 {
                     Id = _[0],
                     SetId = _[1],
+                    Version = int.Parse(_[2]),
                 });
             return inventories;
         }
@@ -56,6 +103,7 @@ namespace LegoLoad
                     InventoryId = _[0].As<int>(),
                     PartId = _[1],
                     Quantity = _[2].As<int>(),
+                    IsSpare = _[3] == "t" 
                 });
             return inventoryParts;
         }

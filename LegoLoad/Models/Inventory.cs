@@ -10,6 +10,7 @@ namespace LegoLoad.Models
     {
         public string Id { get; set; }
         public string SetId { get; set; }
+        public int Version { get; set; }
         public List<Set> Sets { get; set; }
 
         public Inventory()

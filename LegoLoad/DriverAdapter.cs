@@ -1,4 +1,5 @@
-﻿using Neo4j.Driver.V1;
+﻿using LegoLoad.Models;
+using Neo4j.Driver.V1;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -53,6 +54,30 @@ namespace LegoLoad
 
         }
 
+        public ResultModel InsertInventory(Inventory inventory)
+        {
+            StopwatchResetAndStart();
+            using (var session = _driver.Session())
+            {
+                //CREATE (user:User { Id: 456, Name: 'Jim' })
+                //session.WriteTransaction()
+
+
+                session.WriteTransaction(tx =>
+                {
+                    var result = tx.Run("CREATE (a:Inventory {Id: $Id, Version: $Version })",
+                        new { inventory.Id, inventory.Version});
+                });
+
+                return new ResultModel()
+                {
+                    Data = null,
+                    Result = true,
+                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
+                };
+            }
+        }
+
         public ResultModel InsertPart(Part part)
         {
             StopwatchResetAndStart();
@@ -64,7 +89,7 @@ namespace LegoLoad
 
                 session.WriteTransaction(tx =>
                 {
-                    var result = tx.Run("CREATE (a:Part {Id: $Id, Description: $Description})",
+                    var result = tx.Run(@"CREATE (a:Part {Id: $Id, Description: $Description})",
                         new { part.Id, part.Description });
                 });
 
@@ -100,14 +125,14 @@ namespace LegoLoad
             }
         }
 
-        internal ResultModel ExecuteCypher(string cypher)
+        internal ResultModel ExecuteCypher(string cypher, object parameters = null)
         {
             StopwatchResetAndStart();
             using (var session = _driver.Session())
             {
                 session.WriteTransaction(tx =>
                 {
-                    var result = tx.Run(cypher);
+                    return tx.Run(cypher, parameters);
                 });
 
                 return new ResultModel()
