@@ -34,9 +34,8 @@ namespace LegoLoad
             DriverLoadInventory(inventories);
             //DriverSetInventoryRelationship(sets, inventories, "CONTAINS", "CONTAINED_IN");
             //DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS", "CONTAINED_IN");
-            DriverSetInventoryRelationship(sets, inventories, "CONTAINS", "CONTAINED_IN");
-            DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS", "CONTAINED_IN");
-
+            DriverSetInventoryRelationship(sets, inventories, "CONTAINS");
+            DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS");
         }
 
         //private static void DriverInventoryPartRelationship(IEnumerable<InventoryPart> inventoryParts, IEnumerable<Part> parts, string relationship1, string relationship2)
@@ -84,30 +83,18 @@ CREATE (i)-[:{relationship} {{ Quantity: {inventoryPartPart.Quantity}, IsSpare: 
         //private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship1, string relationship2)
         private static void DriverSetInventoryRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, string relationship)
         {
-            // TODO: Add Indexes
-
-            //MATCH(:Artist) -[r: RELEASED] - (: Album)
-            //DELETE r
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher($@"
 MATCH(:Set) -[r:{relationship}] - (:Inventory)
 DELETE r
                 ");
-//                deleteResult = driver.ExecuteCypher($@"
-//MATCH(:Inventory) -[r:{relationship2}] - (:Set)
-//DELETE r
-//                ");
-
-                //CREATE INDEX ON: User(username)
-                //CREATE INDEX ON: Role(name)
 
                 driver.ExecuteCypher("CREATE INDEX ON: Set(Id)");
                 driver.ExecuteCypher("CREATE INDEX ON: Inventory(Id)");
 
                 var setInventories = sets.Join(inventories, _ => _.Id, _ => _.SetId, (set, inventory) => new { set, inventory })
                     .Select(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id, _.inventory.Version });
-                    //.GroupBy(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id });
 
                 foreach (var setInventory in setInventories)
                 {
@@ -115,11 +102,6 @@ DELETE r
 MATCH (s:Set {{Id: '{setInventory.SetId}' }}), (i:Inventory {{ Id: '{setInventory.InventoryId}' }})
 CREATE (s)-[:{relationship} {{ Version: {setInventory.Version} }}]->(i)
                     ");
-
-//                    insertResult = driver.ExecuteCypher($@"
-//MATCH (i:Inventory {{ Id: '{setInventory.InventoryId}' }}), (s:Set {{Id: '{setInventory.SetId}' }})
-//CREATE (i)-[:{relationship2} {{ Version: {setInventory.Version} }}]->(s)
-//                    ");
                 }
             }
         }
@@ -218,25 +200,6 @@ CREATE (s)-[:{relationship} {{ Version: {setInventory.Version} }}]->(i)
             }
         }
 
-        private static void DriverAdapter()
-        {
-            using (var greeter = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
-            {
-                //var greeting = greeter.CreateGreeting("hello, world");
-                //Console.WriteLine($"{greeting.Message} in {greeting.ExecutionTimeInMilliseconds} milliseconds.");
-                var deleteResult = greeter.ExecuteCypher("MATCH (a:Part) DETACH DELETE a");
-
-                //var part = new Part()
-                //{
-                //    Id = "10039",
-                //    Description = "Pullback Motor 8 x 4 x 2/3",
-                //};
-                //var insertResult = greeter.InsertPart(part);
-                //var getResult = ((Part)greeter.GetNode(part.Id).Data);
-                //Console.WriteLine(getResult.Description);
-            }
-        }
-
         /// <summary>
         /// var query = client
         ///     .Cypher
@@ -251,8 +214,6 @@ CREATE (s)-[:{relationship} {{ Version: {setInventory.Version} }}]->(i)
         private static void ClientAdapter()
         {
             var client = new ClientAdapter("http://localhost:7687/db/data", "neo4j", "krampus");
-
-            
         }
     }
 }
