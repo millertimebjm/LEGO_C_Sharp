@@ -204,5 +204,10 @@ return r
             _stopwatch.Stop();
             return _stopwatch.ElapsedMilliseconds;
         }
+
+        internal object Insert(string nodeName, IEnumerable<KeyValuePair<string, string>> attributes)
+        {
+            return ExecuteCypher($"CREATE (n:{nodeName} {{ {string.Join(",", attributes.Select(_ => _.Key + ": '" + _.Value.Replace("\\", "\\\\").Replace("'", "\\'") + "'") )} }})");
+        }
     }
 }

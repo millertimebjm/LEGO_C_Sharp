@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace LegoLoad.Models
 {
-    public class Inventory
+    public class Theme
     {
-        public string Id { get; set; }
-        public string SetId { get; set; }
-        public int Version { get; set; }
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public int? ParentId { get; set; }
     }
 }
