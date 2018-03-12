@@ -102,70 +102,47 @@ namespace LegoLoad
             }
         }
 
-        internal ResultModel InsertSet(Set set)
-        {
-            StopwatchResetAndStart();
-            using (var session = _driver.Session())
-            {
-                //CREATE (user:User { Id: 456, Name: 'Jim' })
-                //session.WriteTransaction()
-
-                session.WriteTransaction(tx =>
-                {
-                    var result = tx.Run("CREATE (a:Set {Id: $Id, Name: $Name, Year: $Year })",
-                        new { set.Id, set.Name, set.Year });
-                });
-
-                return new ResultModel()
-                {
-                    Data = null,
-                    Result = true,
-                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
-                };
-            }
-        }
-
         internal ResultModel ExecuteCypher(string cypher, object parameters = null)
         {
             StopwatchResetAndStart();
             using (var session = _driver.Session())
             {
-                var result = session.WriteTransaction(tx =>
+                var result = session.WriteTransaction<IStatementResult>(tx =>
                 {
                     return tx.Run(cypher, parameters);
                 });
 
                 return new ResultModel()
                 {
-                    Data = null,
+                    Data = result,
                     Result = true,
                     ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
                 };
             }
         }
 
-        public ResultModel GetPart(string id)
-        {
-            StopwatchResetAndStart();
-            using (var session = _driver.Session())
-            {
-                var node = session.ReadTransaction<INode>(tx =>
-                {
-                    var result = tx.Run(@"
-MATCH (a:Part)
-WHERE a.Id = $Id
-RETURN a
-                    ", new { Id = id });
-                    return result.Single()[0].As<INode>();
-                });
+//        public ResultModel GetPart(string id)
+//        {
+//            StopwatchResetAndStart();
+//            using (var session = _driver.Session())
+//            {
+//                var node = session.ReadTransaction(tx =>
+//                {
+//                    var result = tx.Run(@"
+//MATCH (a:Part)
+//WHERE a.Id = $Id
+//RETURN a
+//                    ", new { Id = id });
+//                    return result.Single()[0].As<INode>();
+//                });
 
-                return new ResultModel()
-                {
-                    Data = node.AsPart(),
-                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
-                };
-            }
-        }
+//                return new ResultModel()
+//                {
+//                    Data = node,
+//                    ExecutionTimeInMilliseconds = StopwatchEndAndElapsed(),
+//                };
+//            }
+//        }
 
         /// <summary>
         /// First Type, then Id
@@ -174,17 +151,19 @@ RETURN a
         /// <param name="a">Type/Id</param>
         /// <param name="b">Type/Id</param>
         /// <returns></returns>
-        public ResultModel CreateRelationship_Type_Id(KeyValuePair<string, string> a, KeyValuePair<string,string> b, string relationType)
+        public ResultModel CreateRelationship_Type_Id(KeyValuePair<string, string> a, KeyValuePair<string,string> b, string relationType, IEnumerable<KeyValuePair<string, string>> attributes)
         {
             //MATCH(a: Person),(b: Person)
             //WHERE a.name = 'Node A' AND b.name = 'Node B'
             //CREATE(a) -[r: RELTYPE]->(b)
             //RETURN r
-
+            var attributeString = "";
+            if (attributes != null)
+                attributeString = $"{string.Join(",", attributes.Select(_ => _.Key + ": '" + _.Value.Replace("\\", "\\\\").Replace("'", "\\'") + "'"))}";
             return ExecuteCypher($@"
 MATCH(a: { a.Key}),(b: { b.Key})
 WHERE a.Id = '{a.Value}' AND b.Id = '{b.Value}'
-CREATE(a) -[r: {relationType}]->(b)
+CREATE(a) -[r: {relationType} {{ {attributeString} }}]->(b)
 return r
                     ");
         }
@@ -205,9 +184,20 @@ return r
             return _stopwatch.ElapsedMilliseconds;
         }
 
-        internal object Insert(string nodeName, IEnumerable<KeyValuePair<string, string>> attributes)
+        internal bool InsertNode(string nodeName, IEnumerable<KeyValuePair<string, string>> attributes)
         {
-            return ExecuteCypher($"CREATE (n:{nodeName} {{ {string.Join(",", attributes.Select(_ => _.Key + ": '" + _.Value.Replace("\\", "\\\\").Replace("'", "\\'") + "'") )} }})");
+            var attributeString = $"{string.Join(",", attributes.Select(_ => _.Key + ": '" + _.Value.Replace("\\", "\\\\").Replace("'", "\\'") + "'"))}";
+            var result = ExecuteCypher($"CREATE (n:{nodeName} {{ {attributeString} }})");
+            return result.Result;
+        }
+
+        internal int GetRelationshipCount(string relationship)
+        {
+            var result = ExecuteCypher($"MATCH ()-[r:{relationship}]->() RETURN COUNT(r)");
+            if (result.Result)
+                return result.Data.Single()[0].As<int>();
+            else
+                throw new Exception(result.Message);
         }
     }
 }

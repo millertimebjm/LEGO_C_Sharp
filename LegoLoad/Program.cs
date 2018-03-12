@@ -20,7 +20,7 @@ namespace LegoLoad
         ///     Match ([alias]:[Table])
         ///     RETURN [alias].[Column]
         ///     
-        ///     CREATE ([alias]:[Table] {[column1]: '[value1]', [column2]: '[column2]', ... })
+        ///     CREATE ([alias]:[Table] {[column1]: '[value1]', [column2]: '[value2]', ... })
         /// </summary>
         /// <param name="args"></param>
         static void Main(string[] args)
@@ -33,16 +33,16 @@ namespace LegoLoad
             var inventoryParts = GetInventoryParts();
             var themes = GetThemes();
             var colors = GetColors();
-            
+
+            //DriverLoadColors(colors);
             DriverLoadParts(parts);
             DriverLoadSets(sets);
-            //DriverLoadInventory(inventories);
             DriverLoadThemes(themes);
-            DriverLoadColors(colors);
-            DriverSetPartRelationship(sets, inventories, inventoryParts, "CONTAINS");
+            
+
+            DriverSetPartRelationship(sets, inventories, inventoryParts, colors, "CONTAINS");
             DriverSetThemeRelationship(sets, themes, "HAS_THEME");
             DriverThemeThemeRelationship(themes, "IS_PARENT");
-            //DriverInventoryPartRelationship(inventoryParts, parts, "CONTAINS");
         }
 
         private static IEnumerable<Theme> GetThemes()
@@ -78,13 +78,16 @@ namespace LegoLoad
         /// <param name="sets"></param>
         /// <param name="inventories"></param>
         /// <param name="relationship"></param>
-        private static void DriverSetPartRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, IEnumerable<InventoryPart> inventoryParts, string relationship)
+        private static void DriverSetPartRelationship(IEnumerable<Set> sets, IEnumerable<Inventory> inventories, IEnumerable<InventoryPart> inventoryParts, IEnumerable<Color> colors, string relationship)
         {
             var setInventories = sets.Join(inventories, _ => _.Id, _ => _.SetId, (set, inventory) => new { set, inventory })
                 .Select(_ => new { SetId = _.set.Id, InventoryId = _.inventory.Id, _.inventory.Version });
 
             var setInventoryParts = setInventories.Join(inventoryParts, _ => new { InventoryId = _.InventoryId }, _ => new { InventoryId = _.InventoryId.ToString() }, (set, inventoryPart) => new { set, inventoryPart })
-                .Select(_ => new { SetId = _.set.SetId, _.set.Version, PartId = _.inventoryPart.PartId, _.inventoryPart.ColorId, _.inventoryPart.IsSpare, _.inventoryPart.Quantity });
+                .Select(_ => new { _.set.SetId, _.set.Version, _.inventoryPart.PartId, _.inventoryPart.ColorId, _.inventoryPart.IsSpare, _.inventoryPart.Quantity });
+
+            var setInventoryPartColors = setInventoryParts.Join(colors, _ => _.ColorId, _ => _.Id, (setInventoryPart, color) => new { setInventoryPart, color })
+                .Select(_ => new { _.setInventoryPart.SetId, _.setInventoryPart.Version, _.setInventoryPart.PartId, _.setInventoryPart.IsSpare, _.setInventoryPart.Quantity, ColorName = _.color.Name, _.color.Rgb, _.color.IsTrans });
 
             var count = setInventoryParts.Count();
 
@@ -95,40 +98,29 @@ MATCH(:Set) -[r:{relationship}] - (:Inventory)
 DELETE r
                 ");
 
-                driver.ExecuteCypher("CREATE INDEX ON: Set(Id)");
-
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
-                Parallel.ForEach(setInventoryParts, po, (setInventoryPart) =>
+                Parallel.ForEach(setInventoryPartColors, po, (setInventoryPartColor) =>
                 {
-                    var insertResult = driver.ExecuteCypher($@"
-MATCH (s:Set {{Id: '{setInventoryPart.SetId}' }}), (i:Part {{ Id: '{setInventoryPart.PartId}' }})
-CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
-                    ");
+                    //                    var insertResult = driver.ExecuteCypher($@"
+                    //MATCH (s:Set {{Id: '{setInventoryPart.SetId}' }}), (i:Part {{ Id: '{setInventoryPart.PartId}' }})
+                    //CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version},  }}]->(i)
+                    //                    ");
+
+                    var setPair = new KeyValuePair<string, string>("Set", setInventoryPartColor.SetId.ToString());
+                    var partPair = new KeyValuePair<string, string>("Part", setInventoryPartColor.PartId.ToString());
+                    var attributes = new List<KeyValuePair<string, string>>()
+                    {
+                        new KeyValuePair<string, string>("Version", setInventoryPartColor.Version.ToString()),
+                        new KeyValuePair<string, string>("IsSpare", setInventoryPartColor.IsSpare.ToString()),
+                        new KeyValuePair<string, string>("Quantity", setInventoryPartColor.Quantity.ToString()),
+                        new KeyValuePair<string, string>("ColorName", setInventoryPartColor.ColorName),
+                        new KeyValuePair<string, string>("Rgb", setInventoryPartColor.Rgb),
+                        new KeyValuePair<string, string>("IsTrans", setInventoryPartColor.IsTrans.ToString()),
+                    };
+                    var insertResult = driver.CreateRelationship_Type_Id(setPair, partPair, relationship, attributes);
                 });
-
-//                foreach (var setInventoryPart in setInventoryParts)
-//                {
-//                    var insertResult = driver.ExecuteCypher($@"
-//MATCH (s:Set {{Id: '{setInventoryPart.SetId}' }}), (i:Part {{ Id: '{setInventoryPart.PartId}' }})
-//CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
-//                    ");
-//                }
-            }
-        }
-
-        private static void DriverLoadInventory(IEnumerable<Inventory> inventories)
-        {
-            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
-            {
-                var deleteResult = driver.ExecuteCypher("MATCH (a:Inventory) DETACH DELETE a");
-
-                foreach (var inventory in inventories)
-                {
-                    var insertResult = driver.InsertInventory(inventory);
-                }
-                // 47 seconds
             }
         }
 
@@ -194,24 +186,21 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
                 var deleteResult = driver.ExecuteCypher("MATCH (a:Part) DETACH DELETE a");
-
+                
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
-                Parallel.ForEach(parts, po, (part) => {
+                Parallel.ForEach(parts, po, (part) =>
+                {
                     var keyValuePairs = new List<KeyValuePair<string, string>>()
                     {
                         new KeyValuePair<string, string>("Id", part.Id.ToString()),
                         new KeyValuePair<string, string>("Description", part.Description),
                     };
-                    var insertResult = driver.Insert(nodeName, keyValuePairs);
+                    var insertResult = driver.InsertNode(nodeName, keyValuePairs);
                 });
 
-                //foreach (var part in parts)
-                //{
-                //    var insertResult = driver.InsertPart(part);
-                //}
-                // 47 seconds
+                driver.ExecuteCypher($"CREATE INDEX ON: {nodeName}(Id)");
             }
         }
 
@@ -221,6 +210,13 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
 
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
+                var deleteResult = driver.ExecuteCypher($@"
+MATCH(:Theme) -[r:{relationship}] - (:Theme)
+DELETE r
+                ");
+
+                var beforeCount = driver.GetRelationshipCount(relationship);
+
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
@@ -228,13 +224,12 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                 {
                     var themeChild = new KeyValuePair<string, string>("Theme", theme.Id.ToString());
                     var themeParent = new KeyValuePair<string, string>("Theme", theme.ParentId.ToString());
-                    driver.CreateRelationship_Type_Id(themeChild, themeParent, relationship);
+                    driver.CreateRelationship_Type_Id(themeChild, themeParent, relationship, null);
                 });
 
-                //foreach (var set in sets)
-                //{
-                //    var insertResult = driver.InsertSet(set);
-                //}
+                var afterCount = driver.GetRelationshipCount(relationship);
+                if (afterCount != themes.Count(_ => _.ParentId != null))
+                    throw new Exception("Theme -> Theme Parent relationship count does not match.");
             }
         }
 
@@ -245,6 +240,11 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
 
             using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
             {
+                var deleteResult = driver.ExecuteCypher($@"
+MATCH(:Set) -[r:{relationship}] - (:Theme)
+DELETE r
+                ");
+
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
@@ -252,28 +252,8 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                 {
                     var set = new KeyValuePair<string, string>("Set", setTheme.SetId);
                     var theme = new KeyValuePair<string, string>("Theme", setTheme.ThemeId.ToString());
-                    driver.CreateRelationship_Type_Id(set, theme, relationship);
+                    driver.CreateRelationship_Type_Id(set, theme, relationship, null);
                 });
-
-                //var deleteResult = driver.ExecuteCypher("MATCH (a:Theme) DETACH DELETE a");
-
-                //ParallelOptions po = new ParallelOptions();
-                //po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
-
-                //Parallel.ForEach(themes, po, (set) => {
-                //    var keyValuePairs = new List<KeyValuePair<string, string>>()
-                //    {
-                //        new KeyValuePair<string, string>("Id", set.Id.ToString()),
-                //        new KeyValuePair<string, string>("Name", set.Name),
-                //        new KeyValuePair<string, string>("Year", set.Year.ToString()),
-                //    };
-                //    var insertResult = driver.Insert(nodeName, keyValuePairs);
-                //});
-
-                //foreach (var set in sets)
-                //{
-                //    var insertResult = driver.InsertSet(set);
-                //}
             }
         }
 
@@ -288,20 +268,18 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
-                Parallel.ForEach(sets, po, (set) => {
+                Parallel.ForEach(sets, po, (set) =>
+                {
                     var keyValuePairs = new List<KeyValuePair<string, string>>()
                     {
                         new KeyValuePair<string, string>("Id", set.Id.ToString()),
                         new KeyValuePair<string, string>("Name", set.Name),
                         new KeyValuePair<string, string>("Year", set.Year.ToString()),
                     };
-                    var insertResult = driver.Insert(nodeName, keyValuePairs);
+                    var insertResult = driver.InsertNode(nodeName, keyValuePairs);
                 });
-                
-                //foreach (var set in sets)
-                //{
-                //    var insertResult = driver.InsertSet(set);
-                //}
+
+                driver.ExecuteCypher($"CREATE INDEX ON: {nodeName}(Id)");
             }
         }
 
@@ -323,19 +301,11 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                         new KeyValuePair<string, string>("Name", theme.Name),
                         new KeyValuePair<string, string>("ParentId", theme.ParentId.ToString()),
                     };
-                    var insertResult = driver.Insert(nodeName, keyValuePairs);
+                    var insertResult = driver.InsertNode(nodeName, keyValuePairs);
                 });
 
-                //foreach (var theme in themes)
-                //{
-                //    var keyValuePairs = new List<KeyValuePair<string, string>>()
-                //    {
-                //        new KeyValuePair<string, string>("Id", theme.Id.ToString()),
-                //        new KeyValuePair<string, string>("Name", theme.Name),
-                //        new KeyValuePair<string, string>("ParentId", theme.ParentId.ToString()),
-                //    };
-                //    var insertResult = driver.Insert(nodeName, keyValuePairs);
-                //}
+                driver.ExecuteCypher($"CREATE INDEX ON: {nodeName}(Id)");
+                driver.ExecuteCypher($"CREATE INDEX ON: {nodeName}(ParentId)");
             }
         }
 
@@ -349,7 +319,8 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                 ParallelOptions po = new ParallelOptions();
                 po.MaxDegreeOfParallelism = PARALLEL_LIMIT;
 
-                Parallel.ForEach(colors, po, (color) => {
+                Parallel.ForEach(colors, po, (color) =>
+                {
                     var keyValuePairs = new List<KeyValuePair<string, string>>()
                     {
                         new KeyValuePair<string, string>("Id", color.Id.ToString()),
@@ -357,20 +328,10 @@ CREATE (s)-[:{relationship} {{ Version: {setInventoryPart.Version} }}]->(i)
                         new KeyValuePair<string, string>("Rgb", color.Rgb.ToString()),
                         new KeyValuePair<string, string>("IsTrans", color.IsTrans.ToString()),
                     };
-                    var insertResult = driver.Insert(nodeName, keyValuePairs);
+                    var insertResult = driver.InsertNode(nodeName, keyValuePairs);
                 });
 
-                //foreach (var color in colors)
-                //{
-                //    var keyValuePairs = new List<KeyValuePair<string, string>>()
-                //    {
-                //        new KeyValuePair<string, string>("Id", color.Id.ToString()),
-                //        new KeyValuePair<string, string>("Name", color.Name),
-                //        new KeyValuePair<string, string>("Rgb", color.Rgb.ToString()),
-                //        new KeyValuePair<string, string>("IsTrans", color.IsTrans.ToString()),
-                //    };
-                //    var insertResult = driver.Insert(nodeName, keyValuePairs);
-                //}
+                driver.ExecuteCypher($"CREATE INDEX ON: {nodeName}(Id)");
             }
         }
 
