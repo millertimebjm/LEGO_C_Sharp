@@ -27,27 +27,54 @@ namespace LegoLoad
         {
             //DriverAdapter();
             //ClientAdapter();
+            Console.WriteLine("Get Parts Started...");
             var parts = GetParts();
+            Console.WriteLine("Get Parts Completed.");
+            Console.WriteLine("Get Sets Started...");
             var sets = GetSets();
+            Console.WriteLine("Get Sets Completed.");
+            Console.WriteLine("Get Inventories Started...");
             var inventories = GetInventories();
+            Console.WriteLine("Get Inventories Completed.");
+            Console.WriteLine("Get InventoryParts Started...");
             var inventoryParts = GetInventoryParts();
+            Console.WriteLine("Get InventoryParts Completed.");
+            Console.WriteLine("Get Themes Started...");
             var themes = GetThemes();
+            Console.WriteLine("Get Themes Completed.");
+            Console.WriteLine("Get Colors Started...");
             var colors = GetColors();
+            Console.WriteLine("Get Colors Completed.");
+
+            Console.WriteLine("Get Neo4j Delete All Started...");
+            DriverDeleteAll();
+            Console.WriteLine("Get Neo4j Delete All Completed");
 
             //DriverLoadColors(colors);
+            Console.WriteLine("Get Neo4j Load Part Nodes Started...");
             DriverLoadParts(parts);
+            Console.WriteLine("Get Neo4j Load Part Nodes Completed.");
+            Console.WriteLine("Get Neo4j Load Set Nodes Started...");
             DriverLoadSets(sets);
+            Console.WriteLine("Get Neo4j Load Set Nodes Completed.");
+            Console.WriteLine("Get Neo4j Load Theme Nodes Started...");
             DriverLoadThemes(themes);
-            
+            Console.WriteLine("Get Neo4j Load Theme Nodes Completed...");
 
+            Console.WriteLine("Get Neo4j Load Set Part Relationship Started...");
             DriverSetPartRelationship(sets, inventories, inventoryParts, colors, "CONTAINS");
+            Console.WriteLine("Get Neo4j Load Set Part Relationship Completed.");
+            Console.WriteLine("Get Neo4j Load Set Theme Relationship Started...");
             DriverSetThemeRelationship(sets, themes, "HAS_THEME");
+            Console.WriteLine("Get Neo4j Load Set Theme Relationship Completed.");
+            Console.WriteLine("Get Neo4j Load Theme Theme Relationship Started...");
             DriverThemeThemeRelationship(themes, "IS_PARENT");
+            Console.WriteLine("Get Neo4j Load Theme Theme Relationship Completed.");
         }
 
         private static IEnumerable<Theme> GetThemes()
         {
-            var themes = ReadCsv.Process(@"C:\temp\BigData\LEGO\themes.csv")
+            var themes = ReadCsv.Process(@"files\themes.csv")
                 .Skip(1)
                 .Select(_ => new Theme()
                 {
@@ -60,7 +87,7 @@ namespace LegoLoad
 
         private static IEnumerable<Color> GetColors()
         {
-            var colors = ReadCsv.Process(@"C:\temp\BigData\LEGO\colors.csv")
+            var colors = ReadCsv.Process(@"files\colors.csv")
                 .Skip(1)
                 .Select(_ => new Color()
                 {
@@ -70,6 +97,14 @@ namespace LegoLoad
                     IsTrans = _[3] == "t",
                 });
             return colors;
+        }
+
+        private static void DriverDeleteAll()
+        {
+            using (var driver = new DriverAdapter("bolt://localhost:7687", "neo4j", "krampus"))
+            {
+                driver.ExecuteCypher("MATCH (r) DETACH DELETE r");
+            }
         }
 
         /// <summary>
@@ -126,7 +161,7 @@ DELETE r
 
         private static IEnumerable<Inventory> GetInventories()
         {
-            var inventories = ReadCsv.Process(@"C:\temp\BigData\LEGO\inventories.csv")
+            var inventories = ReadCsv.Process(@"files\inventories.csv")
                 .Skip(1)
                 .Select(_ => new Inventory()
                 {
@@ -140,7 +175,7 @@ DELETE r
 
         private static IEnumerable<InventoryPart> GetInventoryParts()
         {
-            var inventoryParts = ReadCsv.Process(@"C:\temp\BigData\LEGO\inventory_parts.csv")
+            var inventoryParts = ReadCsv.Process(@"files\inventory_parts.csv")
                 .Skip(1)
                 .Select(_ => new InventoryPart()
                 {
@@ -155,7 +190,7 @@ DELETE r
 
         private static IEnumerable<Part> GetParts()
         {
-            var parts = ReadCsv.Process(@"C:\temp\BigData\LEGO\parts.csv")
+            var parts = ReadCsv.Process(@"files\parts.csv")
                 .Skip(1)
                 .Select(_ => new Part()
                 {
@@ -167,7 +202,7 @@ DELETE r
 
         private static IEnumerable<Set> GetSets()
         {
-            var sets = ReadCsv.Process(@"C:\temp\BigData\LEGO\sets.csv")
+            var sets = ReadCsv.Process(@"files\sets.csv")
                 .Skip(1)
                 .Select(_ => new Set()
                 {
